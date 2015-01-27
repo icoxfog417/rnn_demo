@@ -119,7 +119,7 @@ def main(is_elman=True):
     # eval_model(4, 20, True, step=1)
 
     nodes = 4
-    p, r, e1, e2 = predict_ball(nodes, is_elman=is_elman, training_data=20000, training_batch=5000)
+    p, r, e1, e2 = predict_ball(nodes, is_elman=is_elman, training_data=32000, training_batch=1280)
     print("training error:{0}, test error:{1}".format(e1, e2))
     ball_data.show_animation(r, BOX_SIZE)
     ball_data.show_animation(p, BOX_SIZE)

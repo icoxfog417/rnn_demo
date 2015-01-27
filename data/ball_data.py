@@ -10,8 +10,8 @@ http://nbviewer.ipython.org/github/cpbotha/bwtl-python-tutorials/blob/master/par
 """
 
 DIMENSION = 2
-VELOCITY_WEIGHT = np.array([5, 2])
-TIME_INTERVAL = 0.01
+VELOCITY_WEIGHT = np.array([10, 8])
+TIME_INTERVAL = 0.1
 CoR = 0.95
 
 
@@ -72,7 +72,8 @@ def __move(p, v,  box_size):
     elif p[0] >= box_size:
         # hit right wall
         next_v[0] = - CoR * abs(v[0])
-    elif p[1] <= 0:
+
+    if p[1] <= 0:
         # hit bottom wall
         next_v[1] = CoR * abs(v[1])
     elif p[1] >= box_size:
@@ -85,7 +86,7 @@ def __move(p, v,  box_size):
     return next_p, next_v
 
 
-def show_animation(bounce_data, box_size, name="animation"):
+def show_animation(bounce_data, box_size, name=None):
     if len(bounce_data) == 0:
         return False
 
@@ -103,13 +104,19 @@ def show_animation(bounce_data, box_size, name="animation"):
             balls[i].set_data(p[0], p[1])
         return balls
 
-    movie = animation.FuncAnimation(figure, animate, np.arange(len(bounce_data)), interval=50, blit=True)
-    #movie.save("./{0}.gif".format(name), writer='imagemagick', fps=4)
+    movie = animation.FuncAnimation(figure, animate, np.arange(len(bounce_data)), interval=100, blit=True)
+    if name:
+        try:
+            movie.save("./{0}.gif".format(name), writer="imagemagick", fps=4)
+        except Exception as ex:
+            print("image is not saved")
+            pass
+
     plt.show()
 
 
 if __name__ == "__main__":
-    _time = 128
+    _time = 40
     _box_size = 10
     _ball_count = 1
     data, _ = bounce_ball(_time, _box_size, _ball_count)
