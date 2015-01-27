@@ -10,7 +10,7 @@ Elman/Jordan Network (below is Jordan model).
 
 input: x,y position and velocity.
 
-![rnn_demo.PNG](./images/demo_image.PNG)
+![rnn_demo.PNG](./images/rnn_demo.PNG)
 
 ## Training Data
 Generated bouncing ball data from `data/ball_data.py`.
