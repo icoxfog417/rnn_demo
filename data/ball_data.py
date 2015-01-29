@@ -90,7 +90,9 @@ def show_animation(bounce_data, box_size, name=None):
         raise Exception("bounce_data has to be list of bounce ball")
 
     figure = plt.figure()
-    area = figure.add_subplot(111, autoscale_on=False, xlim=box_size, ylim=box_size)
+    area = figure.add_subplot(111, autoscale_on=False)
+    area.xaxis.set_ticks(range(box_size + 1))
+    area.yaxis.set_ticks(range(box_size + 1))
     area.grid()
     balls = []
     for b in range(len(bounce_data)):
@@ -115,7 +117,7 @@ def show_animation(bounce_data, box_size, name=None):
 
 
 if __name__ == "__main__":
-    _time = 40
+    _time = 128
     _box_size = 10
     _ball_count = 1
     data = bounce_balls(_time, _box_size, _ball_count)

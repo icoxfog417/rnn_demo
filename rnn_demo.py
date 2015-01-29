@@ -12,40 +12,48 @@ import data.ball_data as ball_data
 BOX_SIZE = 10
 
 
-def predict_ball(hidden_nodes, is_elman=True, training_data=5000, batch_size=-1, predict_count=64):
-    b_size = training_data
-    if batch_size > 0:
-        if training_data < batch_size:
-            raise Exception("training count have to be greater than training batch size")
-        else:
-            b_size = batch_size
+def predict_ball(hidden_nodes, is_elman=True, training_data=5000, epoch=-1, momentum=0.0, predict_count=128):
 
     # build rnn
     n = construct_network(hidden_nodes, is_elman)
 
     # make training data
+    ep = 1 if epoch < 0 else epoch
     initial_v = ball_data.gen_velocity(BOX_SIZE)
-    data_set = None
-    training_ds = SupervisedDataSet(4, 4)
-
-    for b in range(training_data // b_size):
-        d = ball_data.bounce_ball(b_size + 1, BOX_SIZE, None, initial_v=initial_v)
-        data_set = d[:b_size] if data_set is None else np.vstack((data_set, d[:b_size]))
-
-        d_normalized = __normalize(d)
-        for i in range(b_size):
-            # from current, predict next
-            p_in = d_normalized[i].tolist()
-            p_out = d_normalized[i + 1].tolist()
-            training_ds.addSample(p_in, p_out)
-
+    data_set = ball_data.bounce_ball((training_data + 1) * ep, BOX_SIZE, None, initial_v=initial_v)
     total_avg = np.average(data_set, axis=0)
     total_std = np.std(data_set, axis=0)
+    # initial_p = data_set[np.random.choice(range(training_data))][:2]
+
+    training_ds = []
+    normalized_d = __normalize(data_set)
+    for e_index in range(ep):
+        t_ds = SupervisedDataSet(4, 4)
+        e_begin = e_index * training_data
+        for j in range(e_begin,  e_begin + training_data):
+            # from current, predict next
+            p_in = normalized_d[j].tolist()
+            p_out = normalized_d[j + 1].tolist()
+            t_ds.addSample(p_in, p_out)
+
+        training_ds.append(t_ds)
+
     del data_set  # release memory
 
     # training network
-    trainer = BackpropTrainer(n, training_ds)
-    err1 = trainer.train()
+    err1 = 0
+    if epoch < 0:
+        trainer = BackpropTrainer(n, training_ds[0], momentum=momentum)
+        err1 = trainer.train()
+    else:
+        trainer = BackpropTrainer(n, momentum=momentum)
+        epoch_errs = []
+        for ds in training_ds:
+            trainer.setData(ds)
+            epoch_errs.append(trainer.train())
+
+        err1 = max(epoch_errs)
+
     del training_ds  # release memory
 
     # predict
@@ -119,35 +127,68 @@ def measure_hidden_effect(min_hidden, max_hidden, is_elman=True, step=10, traini
         print("{0}\t{1}\t{2}".format(h, median(training_e), describe_err(test_e, "\t")))
 
 
-def measure_batch_effect(hidden_nodes, min_size, max_size, is_elman=True, step=100, training_data=20000, trial_run=10):
-    for b in range(min_size, max_size + step, step):
+def measure_training_effect(hidden_nodes, min_size, max_size, is_elman=True, step=1000, trial_run=10):
+    for d in range(min_size, max_size + step, step):
         training_e = []
         test_e = None
 
         for i in range(trial_run):
-            p, r, e1, e2 = predict_ball(hidden_nodes, is_elman, training_data, b)
+            p, r, e1, e2 = predict_ball(hidden_nodes, is_elman, training_data=d)
             training_e.append(e1)
             test_e = e2 if test_e is None else np.vstack((test_e, e2))
 
-        print("{0}\t{1}\t{2}".format(b, median(training_e), describe_err(test_e, "\t")))
+        print("{0}\t{1}\t{2}".format(d, median(training_e), describe_err(test_e, "\t")))
+
+
+def measure_batch_effect(hidden_nodes, min_size, max_size, epoch=2000, is_elman=True, step=64, trial_run=1):
+    for d in range(min_size, max_size + step, step):
+        training_e = []
+        test_e = None
+
+        for i in range(trial_run):
+            p, r, e1, e2 = predict_ball(hidden_nodes, is_elman, training_data=d, epoch=epoch)
+            training_e.append(e1)
+            test_e = e2 if test_e is None else np.vstack((test_e, e2))
+
+        print("{0}\t{1}\t{2}".format(d, median(training_e), describe_err(test_e, "\t")))
+
+
+def measure_momentum_effect(hidden_nodes, is_elman=True, training_data=5000, trial_run=10):
+    for m in range(0, 10, 1):
+        training_e = []
+        test_e = None
+        mt = m / 10
+
+        for i in range(trial_run):
+            p, r, e1, e2 = predict_ball(hidden_nodes, is_elman, training_data, momentum=mt)
+            training_e.append(e1)
+            test_e = e2 if test_e is None else np.vstack((test_e, e2))
+
+        print("{0}\t{1}\t{2}".format(mt, median(training_e), describe_err(test_e, "\t")))
 
 
 def run(is_elman=True):
     nodes = 4
-    p, r, e1, e2 = predict_ball(nodes, is_elman=is_elman, training_data=64000, batch_size=64)
+    p, r, e1, e2 = predict_ball(nodes, is_elman=is_elman, training_data=5000)
     print("training error:{0}, test error:{1}".format(e1, describe_err(e2)))
     for x in p:
         print("{0}, {1}".format(x[0], x[1]))
 
-    ball_data.show_animation([r], BOX_SIZE + 1)
-    ball_data.show_animation([p], BOX_SIZE + 1)
+    ball_data.show_animation([r], BOX_SIZE)
+    ball_data.show_animation([p], BOX_SIZE)
 
 
 def main(is_elman=True):
+    """
     # evaluate model by changing hidden layer
-    # measure_batch_effect(4, 64, 2048, False, step=64)
+    print("Elman")
+    measure_batch_effect(4, 32, 128, step=8)
 
-    run(is_elman)
+    print("Jordan")
+    measure_batch_effect(4, 32, 128, is_elman=False, step=8)
+    """
+
+    run(False)
 
 
 if __name__ == "__main__":
