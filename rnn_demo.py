@@ -1,4 +1,5 @@
 import sys
+import json
 from statistics import median
 import numpy as np
 from pybrain.structure import LinearLayer, SigmoidLayer, BiasUnit
@@ -12,7 +13,7 @@ import data.ball_data as ball_data
 BOX_SIZE = 10
 
 
-def predict_ball(hidden_nodes, is_elman=True, training_data=5000, epoch=-1, momentum=0.0, predict_count=128):
+def predict_ball(hidden_nodes, is_elman=True, training_data=5000, epoch=-1, parameters={}, predict_count=128):
 
     # build rnn
     n = construct_network(hidden_nodes, is_elman)
@@ -43,10 +44,10 @@ def predict_ball(hidden_nodes, is_elman=True, training_data=5000, epoch=-1, mome
     # training network
     err1 = 0
     if epoch < 0:
-        trainer = BackpropTrainer(n, training_ds[0], momentum=momentum)
+        trainer = BackpropTrainer(n, training_ds[0], **parameters)
         err1 = trainer.train()
     else:
-        trainer = BackpropTrainer(n, momentum=momentum)
+        trainer = BackpropTrainer(n, **parameters)
         epoch_errs = []
         for ds in training_ds:
             trainer.setData(ds)
@@ -110,11 +111,13 @@ def __normalize(data):
 
 
 def describe_err(error, separator=","):
-    params = np.hstack((np.mean(error, axis=0), np.std(error, axis=0)))
+    # weights = [1 / math.log(x) for x in range(2, error.shape[0] + 2)]
+    weights = [x / error.shape[0] for x in range(error.shape[0], 0, -1)]
+    params = np.hstack((np.average(error, axis=0, weights=weights), np.std(error, axis=0)))
     return separator.join(["{0}".format(p) for p in params])
 
 
-def measure_hidden_effect(min_hidden, max_hidden, is_elman=True, step=10, training_data=5000, trial_run=10):
+def eval_hidden_effect(min_hidden, max_hidden, is_elman=True, step=10, training_data=5000, trial_run=10):
     for h in range(min_hidden, max_hidden + step, step):
         training_e = []
         test_e = None
@@ -127,7 +130,7 @@ def measure_hidden_effect(min_hidden, max_hidden, is_elman=True, step=10, traini
         print("{0}\t{1}\t{2}".format(h, median(training_e), describe_err(test_e, "\t")))
 
 
-def measure_training_effect(hidden_nodes, min_size, max_size, is_elman=True, step=1000, trial_run=10):
+def eval_training_effect(hidden_nodes, min_size, max_size, is_elman=True, step=1000, trial_run=10):
     for d in range(min_size, max_size + step, step):
         training_e = []
         test_e = None
@@ -140,7 +143,7 @@ def measure_training_effect(hidden_nodes, min_size, max_size, is_elman=True, ste
         print("{0}\t{1}\t{2}".format(d, median(training_e), describe_err(test_e, "\t")))
 
 
-def measure_batch_effect(hidden_nodes, min_size, max_size, epoch=2000, is_elman=True, step=64, trial_run=1):
+def eval_batch_effect(hidden_nodes, min_size, max_size, epoch=2000, is_elman=True, step=64, trial_run=1):
     for d in range(min_size, max_size + step, step):
         training_e = []
         test_e = None
@@ -153,26 +156,31 @@ def measure_batch_effect(hidden_nodes, min_size, max_size, epoch=2000, is_elman=
         print("{0}\t{1}\t{2}".format(d, median(training_e), describe_err(test_e, "\t")))
 
 
-def measure_momentum_effect(hidden_nodes, is_elman=True, training_data=5000, trial_run=10):
-    for m in range(0, 10, 1):
+def eval_parameter_effect(hidden_nodes, parameter_array, is_elman=True, training_data=25000, trial_run=5):
+    # parameter array: learning_rate and momentum
+
+    for ps in parameter_array:
         training_e = []
         test_e = None
-        mt = m / 10
 
         for i in range(trial_run):
-            p, r, e1, e2 = predict_ball(hidden_nodes, is_elman, training_data, momentum=mt)
+            p, r, e1, e2 = predict_ball(hidden_nodes, is_elman, training_data, parameters=ps)
             training_e.append(e1)
             test_e = e2 if test_e is None else np.vstack((test_e, e2))
 
-        print("{0}\t{1}\t{2}".format(mt, median(training_e), describe_err(test_e, "\t")))
+        desc = ""
+        print("{0}\t{1}\t{2}".format(json.dumps(ps), median(training_e), describe_err(test_e, "\t")))
 
 
 def run(is_elman=True):
     nodes = 4
-    p, r, e1, e2 = predict_ball(nodes, is_elman=is_elman, training_data=5000)
+    p, r, e1, e2 = predict_ball(nodes, is_elman=is_elman, training_data=20000)
+    # p, r, e1, e2 = predict_ball(nodes, is_elman=is_elman, training_data=1000, epoch=2000)
     print("training error:{0}, test error:{1}".format(e1, describe_err(e2)))
+    """
     for x in p:
         print("{0}, {1}".format(x[0], x[1]))
+    """
 
     ball_data.show_animation([r], BOX_SIZE)
     ball_data.show_animation([p], BOX_SIZE)
@@ -182,12 +190,14 @@ def main(is_elman=True):
     """
     # evaluate model by changing hidden layer
     print("Elman")
-    measure_batch_effect(4, 32, 128, step=8)
+    for lr in range(1, 11):
+        for mt in range(5, 11):
+            eval_parameter_effect(4, [{"learningrate": lr / 1000, "momentum": mt / 10 if mt < 10 else 0}])
 
     print("Jordan")
-    measure_batch_effect(4, 32, 128, is_elman=False, step=8)
+    for lr in range(1, 11):
+        eval_parameter_effect(4, [{"learningrate": lr / 1000}], is_elman=False)
     """
-
     run(False)
 
 
